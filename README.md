@@ -8,8 +8,8 @@
 <td align="center"><strong>Multiplayer</strong></td>
 </tr>
 <tr>
-<td><img src=".github/media/single.gif" alt="Singleplayer gameplay" width="400"></td>
-<td><img src=".github/media/multi.gif" alt="Multiplayer gameplay" width="400"></td>
+<td><img src=".github/media/single.gif" alt="Singleplayer gameplay"></td>
+<td><img src=".github/media/multi.gif" alt="Multiplayer gameplay"></td>
 </tr>
 </table>
 
@@ -18,6 +18,13 @@
 A first-person multiplayer sample project built with **Unity 6** demonstrating how to combine Netcode for GameObjects, Unity Relay, and Vivox proximity voice chat into a complete networked experience for up to 4 players.
 
 Players can walk, sprint, jump, and ground-slam through a shared environment, pick up and throw physics objects, and communicate via 3D positional voice chat — all with server-authoritative networking.
+
+## Getting Started
+
+1. Clone this repository.
+2. Open the project in Unity 6 (`6000.3.5f2`+).
+3. Link the project to a Unity Cloud project with Relay and Vivox enabled via **Edit > Project Settings > Services**.
+4. Open `Assets/Scenes/Multiplayer.unity` and enter Play mode to host a session, or open `Assets/Scenes/Singleplayer.unity` for solo play.
 
 ## Features
 
@@ -75,12 +82,13 @@ Assets/
 | Cinemachine | 3.1.3 |
 | Universal Render Pipeline | 17.3.0 |
 
-## Getting Started
+### Network Architecture
 
-1. Clone this repository.
-2. Open the project in Unity 6 (`6000.3.5f2`+).
-3. Link the project to a Unity Cloud project with Relay and Vivox enabled via **Edit > Project Settings > Services**.
-4. Open `Assets/Scenes/Multiplayer.unity` and enter Play mode to host a session, or open `Assets/Scenes/Singleplayer.unity` for solo play.
+<p align="center">
+<img src=".github/media/client-server-relay.png" alt="Client-server network architecture via Unity Relay">
+</p>
+
+
 
 ## License
 
