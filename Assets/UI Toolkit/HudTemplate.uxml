@@ -1,0 +1,24 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI%20Toolkit/NewUSSFile.uss?fileID=7433441132597879392&amp;guid=e6b15c5266bff3b4e905d4623228ceb6&amp;type=3#NewUSSFile"/>
+    <ui:VisualElement name="hud-root" style="position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0);">
+
+        <!-- Dot crosshair — styled entirely via USS #crosshair -->
+        <ui:VisualElement name="crosshair"/>
+
+        <!-- ESC pause panel -->
+        <ui:VisualElement name="pause-panel" style="display: none; position: absolute; left: 0; top: 0; right: 0; bottom: 0; align-items: center; justify-content: center; background-color: rgba(8, 8, 14, 0.88);">
+
+            <ui:VisualElement name="pause-card" style="background-color: rgb(24, 24, 24); width: 500px; border-top-left-radius: 16px; border-top-right-radius: 16px; border-bottom-right-radius: 16px; border-bottom-left-radius: 16px; border-left-width: 0; border-right-width: 0; border-top-width: 0; border-bottom-width: 0; align-items: stretch; overflow: hidden;">
+
+                <!-- Card content -->
+                <ui:VisualElement style="padding-top: 32px; padding-right: 32px; padding-bottom: 32px; padding-left: 32px; align-items: stretch;">
+                    <ui:Label text="Audio Settings" style="color: rgb(240, 240, 248); font-size: 30px; -unity-font-style: bold; -unity-text-align: upper-center; margin-bottom: 24px;"/>
+                    <ui:ScrollView name="player-list" style="max-height: 250px; margin-bottom: 16px;"/>
+                    <ui:Button name="pause-leave-btn" text="Leave Game" style="height: 60px; font-size: 22px; color: rgb(255, 255, 255); background-color: rgb(245, 78, 106); border-top-width: 0; border-right-width: 0; border-bottom-width: 0; border-left-width: 0;"/>
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

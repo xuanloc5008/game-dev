@@ -1,0 +1,10 @@
+<ui:UXML xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" noNamespaceSchemaLocation="../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI%20Toolkit/NewUSSFile.uss?fileID=7433441132597879392&amp;guid=e6b15c5266bff3b4e905d4623228ceb6&amp;type=3#NewUSSFile"/>
+    <ui:VisualElement style="position: absolute; left: 0; top: 0; bottom: 0; width: 18px; background-color: rgb(105, 248, 255);"/>
+    <ui:Label text="First Person " style="color: rgb(255, 255, 255); -unity-font-style: bold; font-size: 103px; position: absolute; top: 178px; left: 73px; height: 148px; width: 1336px;"/>
+    <ui:VisualElement style="position: absolute; left: 73px; top: 342px; width: 466px; height: 4px; background-color: rgb(50, 50, 55);"/>
+    <ui:Button name="start-btn" text="Start" style="height: 116px; width: 336px; position: absolute; top: 569px; left: 102px; font-size: 45px; background-color: rgb(24, 24, 24);"/>
+    <ui:Button name="quit-btn" text="Quit" style="height: 116px; width: 336px; position: absolute; top: 700px; left: 103px; font-size: 45px;"/>
+    <ui:Button name="leave-btn" text="Leave" style="height: 116px; width: 336px; position: absolute; top: 905px; left: 1263px; font-size: 45px; display: none;"/>
+    <ui:Button name="copy-btn" text="" style="height: 50px; width: 50px; position: absolute; top: 1003px; left: 1175px; background-image: url(&quot;project://database/Assets/Sprites/CopyClipboard.png?fileID=21300000&amp;guid=644ac3388a7b03348ba166869d1663e8&amp;type=3#CopyClipboard&quot;); -unity-background-scale-mode: scale-to-fit; background-color: rgba(0, 0, 0, 0); border-top-width: 0; border-right-width: 0; border-bottom-width: 0; border-left-width: 0; padding-top: 0; padding-right: 0; padding-bottom: 0; padding-left: 0; display: none;"/>
+</ui:UXML>

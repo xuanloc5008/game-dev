@@ -1,0 +1,112 @@
+/* =====================================================
+   SQUAD UP — Dark Arcade UI Theme
+   Surface: rgb(24, 24, 24)  dark grey
+   Accent:  rgb(117,255, 81) green / rgb(220,80,80) red
+   Text:    rgb(240,240,248) near-white
+   ===================================================== */
+
+VisualElement {
+}
+
+/* ── Buttons ── */
+
+Button {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+    -unity-font-style: bold;
+    color: rgb(240, 240, 248);
+    background-color: rgb(24, 24, 24);
+    border-left-color: rgb(24, 24, 24);
+    border-right-color: rgb(24, 24, 24);
+    border-top-color: rgb(24, 24, 24);
+    border-bottom-color: rgb(24, 24, 24);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    font-size: 28px;
+    -unity-text-outline-width: 0;
+    -unity-text-align: middle-center;
+    transform-origin: center center;
+    scale: 1 1;
+    transition-property: scale;
+    transition-duration: 0.2s;
+    transition-timing-function: ease-out;
+}
+
+Button:hover {
+    scale: 1.05 1.05;
+}
+
+Button:active {
+    scale: 0.97 0.97;
+    translate: 0px 3px;
+}
+
+/* ── Text Fields ── */
+
+.unity-base-text-field__input {
+    background-color: rgb(24, 24, 24);
+    border-left-color: rgb(24, 24, 24);
+    border-right-color: rgb(24, 24, 24);
+    border-top-color: rgb(24, 24, 24);
+    border-bottom-color: rgb(24, 24, 24);
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    color: rgb(240, 240, 248);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.unity-base-text-field__input:focus {
+    border-left-color: rgb(50, 50, 55);
+    border-right-color: rgb(50, 50, 55);
+    border-top-color: rgb(50, 50, 55);
+    border-bottom-color: rgb(50, 50, 55);
+}
+
+/* Collapse the empty label on the join code field */
+#join-code-field > .unity-base-field__label {
+    width: 0;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* ── Pause card compact buttons (mute rows) ── */
+
+#pause-card Button {
+    font-size: 18px;
+    height: 36px;
+}
+
+/* ── Crosshair — minimal white dot ── */
+
+#crosshair {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    margin-left: -3px;
+    margin-top: -3px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.85);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+}
