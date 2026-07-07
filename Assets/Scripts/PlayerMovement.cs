@@ -18,7 +18,6 @@ public class PlayerMovement : MonoBehaviour
     private CharacterController _cc;
     private PlayerInteraction _interaction;
     private PlayerInput _playerInput;
-    private InputActionAsset _ownActions;
 
     private InputAction _moveAction;
     private InputAction _lookAction;
@@ -47,11 +46,6 @@ public class PlayerMovement : MonoBehaviour
     public void StartPlaying()
     {
         EnableActions();
-
-        _slamAction = new InputAction("Slam", InputActionType.Button);
-        _slamAction.AddBinding("<Keyboard>/leftCtrl");
-        _slamAction.Enable();
-
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         StartCoroutine(BlendToPlayerCamera());
@@ -60,32 +54,16 @@ public class PlayerMovement : MonoBehaviour
     private void EnableActions()
     {
         if (_playerInput == null) return;
-
-        // PlayerInput's user/device pairing breaks on NGO-spawned objects.
-        // Clone the InputActionAsset so this player owns its own action instances,
-        // then enable the map directly — bypasses PlayerInput but keeps the asset bindings.
-        var sourceAsset = _playerInput.actions;
-        _playerInput.enabled = false;
-
-        _ownActions = Instantiate(sourceAsset);
-        var playerMap = _ownActions.FindActionMap("Player");
-        playerMap?.Enable();
-
-        _moveAction = _ownActions.FindAction("Player/Move");
-        _lookAction = _ownActions.FindAction("Player/Look");
-        _jumpAction = _ownActions.FindAction("Player/Jump");
-        _sprintAction = _ownActions.FindAction("Player/Sprint");
-    }
-
-    private void OnDestroy()
-    {
-        _slamAction?.Disable();
-        _slamAction?.Dispose();
-        if (_ownActions != null)
-        {
-            _ownActions.Disable();
-            Destroy(_ownActions);
-        }
+        _moveAction = _playerInput.actions["Move"];
+        _lookAction = _playerInput.actions["Look"];
+        _jumpAction = _playerInput.actions["Jump"];
+        _sprintAction = _playerInput.actions["Sprint"];
+        _slamAction = _playerInput.actions["Slam"];
+        _moveAction?.Enable();
+        _lookAction?.Enable();
+        _jumpAction?.Enable();
+        _sprintAction?.Enable();
+        _slamAction?.Enable();
     }
 
     private IEnumerator BlendToPlayerCamera()
