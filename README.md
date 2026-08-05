@@ -36,27 +36,6 @@ Players can walk, sprint, jump, and ground-slam through a shared environment, pi
 - **Singleplayer mode** — a standalone scene for exploring mechanics without networking
 - **Connection approval** — server-side player cap and designated spawn points
 
-## Requirements
-
-- **Unity 6** (version `6000.3.5f2` or later)
-- A [Unity Cloud](https://cloud.unity.com/) project with **Relay** and **Vivox** services enabled
-
-## Project Structure
-
-```
-Assets/
-├── Input/          Input Action assets
-├── Materials/      Player and world materials
-├── Prefabs/        Items, controllers, spawn points
-├── Scenes/         Multiplayer.unity, Singleplayer.unity
-├── Scripts/        All C# gameplay scripts
-├── Settings/       URP render pipeline and movement settings
-├── Sprites/        2D sprites (speaker icon, etc.)
-├── Terrain/        Terrain assets
-├── Textures/       Texture assets
-└── UI Toolkit/     UXML/USS UI layout files
-```
-
 ### Key Scripts
 
 | Script | Purpose |
