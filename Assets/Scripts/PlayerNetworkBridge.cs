@@ -9,7 +9,14 @@ public class PlayerNetworkBridge : NetworkBehaviour
 {
     private PlayerMovement _movement;
 
-    private void Awake() => _movement = GetComponent<PlayerMovement>();
+    private void Awake()
+    {
+        _movement = GetComponent<PlayerMovement>();
+        if (GetComponent<SherpaVoiceController>() == null)
+        {
+            gameObject.AddComponent<SherpaVoiceController>();
+        }
+    }
 
     /// <summary>
     /// Handling logic for not allowing the player to roam in the menu state.
@@ -42,5 +49,11 @@ public class PlayerNetworkBridge : NetworkBehaviour
     {
         if (!IsOwner) return;
         GameManager.OnGameStarted -= _movement.StartPlaying;
+    }
+
+    private void OnDestroy()
+    {
+        if (_movement != null)
+            GameManager.OnGameStarted -= _movement.StartPlaying;
     }
 }
