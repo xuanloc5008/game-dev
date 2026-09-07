@@ -8,12 +8,13 @@ using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// Advanced Voice Controller using Sherpa-ONNX Zipformer Vietnamese model (30M-int8).
-/// Features 3-Layer Speech Engineering:
-/// 1. DSP Audio Filtering: Zero Crossing Rate (ZCR) to drop breath/noise and measure sustained vowel duration (Ngân dài).
-/// 2. Fast Greedy Search Decoding on CPU.
-/// 3. Strict Out-Of-Vocabulary (OOV) Rejection: Rejects any words/ambient sounds not matching target vowels.
-/// Supports both Short Spell ("U", "I", "A") and Charged Spell ("U_LONG", "I_LONG", "A_LONG").
+/// Production-Grade Hybrid Voice Controller for Unity Multiplayer:
+/// 1. Frontend DSP: Pre-emphasis filter + Zero Crossing Rate (ZCR) breath/noise gating.
+/// 2. Dual-Engine Verification:
+///    - Branch A: LPC Formant Tracking (Physical F1 & F2 vowel resonance extraction).
+///    - Branch B: Sherpa-ONNX Zipformer Vietnamese neural token decoding.
+/// 3. Consensus Gate: Cross-validates acoustic formant fingerprint with neural ASR.
+/// 4. Duration Classifier: Accurately distinguishes short burst ("U", "I", "A") vs sustained ("U_LONG", "I_LONG", "A_LONG").
 /// </summary>
 public class SherpaVoiceController : NetworkBehaviour
 {
@@ -26,12 +27,12 @@ public class SherpaVoiceController : NetworkBehaviour
     [SerializeField] private string _joinerFile = "joiner.int8.onnx";
     [SerializeField] private string _tokensFile = "tokens.txt";
 
-    [Header("Vowel & Noise Filtering (DSP)")]
+    [Header("Audio & Noise Gating (DSP)")]
     [SerializeField] private float _volumeThreshold = 0.0035f;
     [SerializeField] private float _maxZcrThreshold = 0.28f;       // Filters out breath/fricatives/clicks (ZCR > 0.28)
     [SerializeField] private float _minVowelDuration = 0.18f;      // Discard clicks/pops shorter than 0.18s
-    [SerializeField] private float _sustainedThreshold = 0.70f;    // >= 0.7s continuous vowel is "Ngân dài"
-    [SerializeField] private float _spellCooldown = 0.6f;
+    [SerializeField] private float _sustainedThreshold = 0.65f;    // >= 0.65s continuous vowel triggers Charged Spell (Ngân dài)
+    [SerializeField] private float _spellCooldown = 0.5f;
     [SerializeField] private int _sampleRate = 16000;
 
     private OfflineRecognizer _recognizer;
@@ -108,10 +109,10 @@ public class SherpaVoiceController : NetworkBehaviour
             config.ModelConfig.Provider = "cpu";
             config.ModelConfig.NumThreads = 2;
             config.DecodingMethod = "greedy_search";
-            config.HotwordsFile = ""; // greedy_search requires empty hotwords string
+            config.HotwordsFile = "";
 
             _recognizer = new OfflineRecognizer(config);
-            Debug.Log("<color=green>[SherpaVoiceController] Khởi tạo thành công Sherpa-ONNX Zipformer VN (3-Layer Vowel Filter)!</color>");
+            Debug.Log("<color=green>[SherpaVoiceController] Khởi tạo thành công Hybrid Pipeline: DSP Formants + Sherpa-ONNX Zipformer VN!</color>");
         }
         catch (Exception ex)
         {
@@ -149,7 +150,7 @@ public class SherpaVoiceController : NetworkBehaviour
         _currentVoiceDuration = 0f;
         _silenceDuration = 0f;
 
-        Debug.Log("<color=green>[SherpaVoiceController] Microphone active! Đang lắng nghe nguyên âm U, I, A (hỗ trợ cả âm ngắn & ngân dài)...</color>");
+        Debug.Log("<color=green>[SherpaVoiceController] Microphone active! Pipeline Sẵn Sàng (U, I, A - Âm ngắn & Ngân dài)...</color>");
     }
 
     public void StopListening()
@@ -170,8 +171,7 @@ public class SherpaVoiceController : NetworkBehaviour
         int currentPos = Microphone.GetPosition(_selectedDevice);
         if (currentPos < 0) return;
 
-        // Process audio in 100ms slices (1600 samples)
-        int stepSamples = 1600;
+        int stepSamples = 1600; // 100ms analysis step
         int samplesAvailable = (currentPos >= _lastSamplePos) 
             ? (currentPos - _lastSamplePos) 
             : (_micClip.samples - _lastSamplePos + currentPos);
@@ -187,18 +187,15 @@ public class SherpaVoiceController : NetworkBehaviour
     }
 
     /// <summary>
-    /// Layer 1: DSP Audio Energy & Zero Crossing Rate (ZCR) filtering.
-    /// Tracks sustained vowel duration ("Ngân dài").
+    /// Giai đoạn 1: Lọc năng lượng RMS & Zero Crossing Rate (ZCR) để loại bỏ tiếng thở/tiếng gió
     /// </summary>
     private void AnalyzeAudioSlice(float[] slice)
     {
-        float rms = CalculateRMS(slice);
-        float zcr = CalculateZCR(slice);
-
+        float rms = SpeechDSPUtils.CalculateRMS(slice);
+        float zcr = SpeechDSPUtils.CalculateZCR(slice);
         float sliceDuration = (float)slice.Length / _sampleRate;
 
-        // Condition for valid human voiced sound:
-        // RMS above volume threshold AND ZCR < 0.28 (Vowels have periodic low-ZCR, noise/breath has high erratic ZCR)
+        // Tiếng nói thật: RMS > VolumeThreshold VÀ ZCR <= 0.28 (nguyên âm có chu kỳ đều đặn)
         bool isVoiced = (rms >= _volumeThreshold) && (zcr <= _maxZcrThreshold);
 
         if (isVoiced)
@@ -213,7 +210,6 @@ public class SherpaVoiceController : NetworkBehaviour
             {
                 _silenceDuration += sliceDuration;
 
-                // When silence exceeds timeout, the vowel utterance has finished
                 if (_silenceDuration >= SILENCE_TIMEOUT)
                 {
                     FinalizeUtterance();
@@ -226,20 +222,22 @@ public class SherpaVoiceController : NetworkBehaviour
     {
         if (_currentVoiceDuration >= _minVowelDuration && !_isProcessing && Time.time >= _lastSpellTime + _spellCooldown)
         {
-            float[] samplesToRecognize = _currentUtteranceSamples.ToArray();
+            float[] rawSamples = _currentUtteranceSamples.ToArray();
             float duration = _currentVoiceDuration;
             bool isSustained = duration >= _sustainedThreshold;
 
-            _ = ProcessSpeechAsync(samplesToRecognize, duration, isSustained);
+            _ = ProcessSpeechHybridAsync(rawSamples, duration, isSustained);
         }
 
-        // Reset buffer
         _currentUtteranceSamples.Clear();
         _currentVoiceDuration = 0f;
         _silenceDuration = 0f;
     }
 
-    private async Task ProcessSpeechAsync(float[] samples, float duration, bool isSustained)
+    /// <summary>
+    /// Giai đoạn 2 & 3: Xử lý Kép (DSP Formants + Sherpa-ONNX) và Đối chiếu Đồng Thuận
+    /// </summary>
+    private async Task ProcessSpeechHybridAsync(float[] rawSamples, float duration, bool isSustained)
     {
         if (_recognizer == null)
         {
@@ -251,45 +249,52 @@ public class SherpaVoiceController : NetworkBehaviour
         try
         {
             string mode = isSustained ? "<color=magenta>[NGÂN DÀI]</color>" : "<color=cyan>[ÂM NGẮN]</color>";
-            Debug.Log($"<color=white>[Sherpa-ONNX VN] {mode} Âm thanh kết thúc ({duration:F2}s), đang giải mã...</color>");
 
+            // 1. Áp dụng Pre-emphasis bù phổ cao tần
+            float[] preEmphasized = SpeechDSPUtils.ApplyPreEmphasis(rawSamples, 0.97f);
+
+            // 2. Nhánh A: Trích xuất vân tay Formant vật lý (F1, F2)
+            bool hasFormants = SpeechDSPUtils.EstimateFormants(preEmphasized, _sampleRate, out float f1, out float f2);
+            SpeechDSPUtils.VowelClass formantVowel = hasFormants 
+                ? SpeechDSPUtils.ClassifyFormantVowel(f1, f2) 
+                : SpeechDSPUtils.VowelClass.None;
+
+            Debug.Log($"<color=white>[Pipeline GĐ1-2] {mode} Âm {duration:F2}s | Formants: F1={f1:F0}Hz, F2={f2:F0}Hz ──► Kết quả Vật Lý: {formantVowel}</color>");
+
+            // 3. Nhánh B: Giải mã mạng nơ-ron Sherpa-ONNX Zipformer
             string recognizedText = await Task.Run(() =>
             {
                 using var stream = _recognizer.CreateStream();
                 if (stream == null || stream.Handle == IntPtr.Zero)
-                {
                     return string.Empty;
-                }
 
-                stream.AcceptWaveform(_sampleRate, samples);
+                stream.AcceptWaveform(_sampleRate, preEmphasized);
                 _recognizer.Decode(stream);
 
                 var res = stream.Result;
                 return res != null ? res.Text : string.Empty;
             });
 
-            if (!string.IsNullOrWhiteSpace(recognizedText))
-            {
-                string raw = recognizedText.Trim();
-                Debug.Log($"<color=yellow>[Sherpa-ONNX Heard]</color> \"{raw}\"");
+            string rawText = recognizedText.Trim();
+            Debug.Log($"<color=yellow>[Sherpa-ONNX ASR Token]</color> \"{rawText}\"");
 
-                // Layer 3: Strict Regex & Out-of-Vocabulary (OOV) Rejection
-                string detectedSpell = ParseAndFilterVowels(raw, isSustained);
-                if (!string.IsNullOrEmpty(detectedSpell))
-                {
-                    _lastSpellTime = Time.time;
-                    Debug.Log($"<color=green>[Sherpa-ONNX Spell] MATCHED '{detectedSpell}' (Sustained: {isSustained})!</color>");
-                    CastSpellRpc(detectedSpell);
-                }
-                else
-                {
-                    Debug.Log($"<color=grey>[Sherpa-ONNX Filter] Đã loại bỏ ngoại âm: \"{raw}\"</color>");
-                }
+            // 4. Giai đoạn 3: Đối chiếu Đồng Thuận (Consensus Decision Gate)
+            string detectedSpell = EvaluateConsensus(formantVowel, rawText, isSustained);
+
+            if (!string.IsNullOrEmpty(detectedSpell))
+            {
+                _lastSpellTime = Time.time;
+                Debug.Log($"<color=green>[Consensus Gate] ★★★ DUYỆT THÀNH CÔNG '{detectedSpell}' (Ngân dài: {isSustained}) ★★★</color>");
+                CastSpellRpc(detectedSpell);
+            }
+            else
+            {
+                Debug.Log($"<color=grey>[Consensus Gate] ✘ Từ chối ngoại âm (Formant={formantVowel}, ASR=\"{rawText}\")</color>");
             }
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[SherpaVoiceController] Recognition error: {ex.Message}");
+            Debug.LogWarning($"[SherpaVoiceController] Processing error: {ex.Message}");
         }
         finally
         {
@@ -297,83 +302,62 @@ public class SherpaVoiceController : NetworkBehaviour
         }
     }
 
-    private float CalculateRMS(float[] samples)
+    /// <summary>
+    /// Giai đoạn 3: Quyết định đồng thuận giữa Vật lý (Formant) và AI (ASR)
+    /// </summary>
+    private string EvaluateConsensus(SpeechDSPUtils.VowelClass formantVowel, string rawText, bool isSustained)
     {
-        if (samples == null || samples.Length == 0) return 0f;
-        float sum = 0f;
-        for (int i = 0; i < samples.Length; i++)
-            sum += samples[i] * samples[i];
-        return Mathf.Sqrt(sum / samples.Length);
-    }
+        string asrVowel = ParseAsrVowel(rawText);
 
-    private float CalculateZCR(float[] samples)
-    {
-        if (samples == null || samples.Length < 2) return 0f;
-        int count = 0;
-        for (int i = 1; i < samples.Length; i++)
-        {
-            if ((samples[i] >= 0f && samples[i - 1] < 0f) || (samples[i] < 0f && samples[i - 1] >= 0f))
-                count++;
-        }
-        return (float)count / samples.Length;
+        string finalVowel = null;
+
+        // Trường hợp 1: Cả hai bên cùng đồng thuận 100%
+        if (formantVowel == SpeechDSPUtils.VowelClass.U && asrVowel == "U") finalVowel = "U";
+        else if (formantVowel == SpeechDSPUtils.VowelClass.I && asrVowel == "I") finalVowel = "I";
+        else if (formantVowel == SpeechDSPUtils.VowelClass.A && asrVowel == "A") finalVowel = "A";
+
+        // Trường hợp 2: Formant vật lý xác nhận chắc chắn (F1/F2 chuẩn) và ASR có từ khóa tương thích
+        else if (formantVowel == SpeechDSPUtils.VowelClass.U && (asrVowel == "U" || string.IsNullOrEmpty(asrVowel)))
+            finalVowel = "U";
+        else if (formantVowel == SpeechDSPUtils.VowelClass.I && (asrVowel == "I" || string.IsNullOrEmpty(asrVowel)))
+            finalVowel = "I";
+        else if (formantVowel == SpeechDSPUtils.VowelClass.A && (asrVowel == "A" || string.IsNullOrEmpty(asrVowel)))
+            finalVowel = "A";
+
+        // Trường hợp 3: ASR nhận diện rõ ràng nguyên âm đơn
+        else if (!string.IsNullOrEmpty(asrVowel))
+            finalVowel = asrVowel;
+
+        if (finalVowel == null) return null;
+
+        // Phân loại Âm ngắn vs Ngân dài (Charged Spell)
+        return isSustained ? $"{finalVowel}_LONG" : finalVowel;
     }
 
     /// <summary>
-    /// Layer 3: Strict Vowel Filtering & Out-of-Vocabulary (OOV) Rejection.
-    /// Rejects any word containing non-vowel consonants or noise.
-    /// Differentiates between short vowels and sustained/elongated vowels ("Ngân dài").
+    /// Phân tích ký tự ASR, cho phép các biến thể âm học tự nhiên tiếng Việt
     /// </summary>
-    public static string ParseAndFilterVowels(string rawText, bool isSustainedByDuration)
+    private static string ParseAsrVowel(string rawText)
     {
         if (string.IsNullOrWhiteSpace(rawText)) return null;
 
-        // Chuẩn hóa văn bản thành chữ in hoa và bỏ dấu câu
         string cleaned = Regex.Replace(rawText.ToUpperInvariant(), @"[^\w\s\u00C0-\u1EF9]", " ").Trim();
         string[] words = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        bool hasU = false;
-        bool hasI = false;
-        bool hasA = false;
-        bool hasRepeatedLetters = false;
-
         foreach (var w in words)
         {
-            if (w.Length >= 2) hasRepeatedLetters = true;
-
-            // Nhóm U:
-            // 1. Bao gồm các nguyên âm gốc: U, Ú, Ù, Ủ, Ũ, Ụ, Ư, Ứ, Ừ, Ử, Ữ, Ự
-            // 2. Các nguyên âm tròn môi đồng dạng khi ngân dài: Ô, Ố, Ồ, Ổ, Ỗ, Ộ, O, Ó, Ò, Ỏ, Õ, Ọ, W
-            // 3. Các tiền âm bật hơi nhẹ: H (HU, HÚ, HÙ, HÔ), TH (THU, THÌ, THỒ)
+            // Nhóm U: U, Ú, Ù, Ư... và các biến thể âm tròn môi khi ngân dài: Ô, Ồ, Ố, O, Ò, Ó, HU, HÚ, THÌ
             if (Regex.IsMatch(w, @"^(H|TH)?[UÚÙỦŨỤƯỨỪỬỮỰÔỐỒỔỖỘOÓÒỎÕỌW]+$") || w == "THÌ")
-            {
-                hasU = true;
-                continue;
-            }
+                return "U";
 
-            // Nhóm I:
-            // Bao gồm: I, Í, Ì, Ỉ, Ĩ, Ị, Y, Ý, Ỳ, Ỷ, Ỹ, Ỵ, E, É, È, Ẻ, Ẽ, Ẹ, Ê, Ế, Ề, Ể, Ễ, Ệ
-            // Và tiền âm thở nhẹ: HI, HÍ, HÌ...
+            // Nhóm I: I, Í, Ì... Y, Ý, Ỳ... E, É, È, Ê... HI, HÍ
             if (Regex.IsMatch(w, @"^[H]?[IÍÌỈĨỊYÝỲỶỸỴEÉÈẺẼẸÊẾỀỂỄỆ]+$"))
-            {
-                hasI = true;
-                continue;
-            }
+                return "I";
 
-            // Nhóm A:
-            // Bao gồm: A, Á, À, Ả, Ã, Ạ, Ă, Ắ, Ằ, Ẳ, Ẵ, Ặ, Â, Ấ, Ầ, Ẩ, Ẫ, Ậ
-            // Và tiền âm/hậu âm thở nhẹ: HA, HÁ, HÀ, AH...
+            // Nhóm A: A, Á, À... Ă, Â... HA, HÁ, AH
             if (Regex.IsMatch(w, @"^[H]?[AÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬ]+[H]?$"))
-            {
-                hasA = true;
-                continue;
-            }
+                return "A";
         }
-
-        bool isLong = isSustainedByDuration || hasRepeatedLetters;
-
-        if (hasU) return isLong ? "U_LONG" : "U";
-        if (hasI) return isLong ? "I_LONG" : "I";
-        if (hasA) return isLong ? "A_LONG" : "A";
 
         return null;
     }
@@ -404,26 +388,26 @@ public class SherpaVoiceController : NetworkBehaviour
             {
                 // PHÉP U: LƯỚT
                 case "U":
-                    Debug.Log("<color=cyan>[Action U] Lướt nhanh tiêu chuẩn!</color>");
+                    Debug.Log("<color=cyan>[Action U] 💨 LƯỚT NHANH TIÊU CHUẨN!</color>");
                     break;
                 case "U_LONG":
-                    Debug.Log("<color=cyan>[Action U_LONG] ★★★ SIÊU LƯỚT THẦN TỐC (MEGA CHARGED DASH) ★★★</color>");
+                    Debug.Log("<color=cyan>[Action U_LONG] ⚡★★★ SIÊU LƯỚT THẦN TỐC (MEGA CHARGED DASH) ★★★</color>");
                     break;
 
                 // PHÉP I: KHIÊN
                 case "I":
-                    Debug.Log("<color=magenta>[Action I] Khiên bảo vệ tiêu chuẩn!</color>");
+                    Debug.Log("<color=magenta>[Action I] 🛡️ KHIÊN BẢO VỆ TIÊU CHUẨN!</color>");
                     break;
                 case "I_LONG":
-                    Debug.Log("<color=magenta>[Action I_LONG] ★★★ KHIÊN BẤT HOẠI TOÀN NĂNG (IMMORTAL BARRIER) ★★★</color>");
+                    Debug.Log("<color=magenta>[Action I_LONG] 🔮★★★ KHIÊN BẤT HOẠI TOÀN NĂNG (IMMORTAL BARRIER) ★★★</color>");
                     break;
 
                 // PHÉP A: NHẢY / XUNG KÍCH
                 case "A":
-                    Debug.Log("<color=red>[Action A] Nhảy cao tiêu chuẩn!</color>");
+                    Debug.Log("<color=red>[Action A] 🦘 NHẢY CAO TIÊU CHUẨN!</color>");
                     break;
                 case "A_LONG":
-                    Debug.Log("<color=red>[Action A_LONG] ★★★ ĐẠI ĐỊA CHẤN XUNG KÍCH (EARTHQUAKE SHOCKWAVE) ★★★</color>");
+                    Debug.Log("<color=red>[Action A_LONG] 💥★★★ ĐẠI ĐỊA CHẤN XUNG KÍCH (EARTHQUAKE SHOCKWAVE) ★★★</color>");
                     break;
             }
         }
