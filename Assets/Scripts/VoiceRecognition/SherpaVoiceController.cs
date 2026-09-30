@@ -35,6 +35,36 @@ public class SherpaVoiceController : NetworkBehaviour
     [SerializeField] private float _spellCooldown = 0.5f;
     [SerializeField] private int _sampleRate = 16000;
 
+    [Header("Multiplayer Voice Tracking")]
+    [SerializeField, Min(0.05f)] private float _heartbeatInterval = 0.15f;
+    [SerializeField, Range(3, 9)] private int _vowelWindowSize = 5;
+    [SerializeField, Range(2, 7)] private int _minimumStableVotes = 3;
+
+    public NetworkVariable<VoiceTrackState> TrackedState = new(
+        VoiceTrackState.Idle,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    public NetworkVariable<VoiceVowel> TrackedVowel = new(
+        VoiceVowel.None,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    public NetworkVariable<float> TrackedContinuousDuration = new(
+        0f,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    public NetworkVariable<VoiceEndReason> TrackedEndReason = new(
+        VoiceEndReason.None,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
+    public NetworkVariable<bool> IsActivelyVoicing = new(
+        false,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
+
     private OfflineRecognizer _recognizer;
     private float _lastSpellTime;
     private AudioClip _micClip;
@@ -48,39 +78,59 @@ public class SherpaVoiceController : NetworkBehaviour
     private float _currentVoiceDuration;
     private float _silenceDuration;
     private const float SILENCE_TIMEOUT = 0.18f; // If silence persists > 0.18s, utterance has ended
+    private readonly Queue<VoiceVowel> _recentVowelVotes = new Queue<VoiceVowel>();
+    private VoiceVowel _stableVowel;
+    private uint _utteranceSequence;
+    private bool _isTrackingUtterance;
+    private float _nextHeartbeatTime;
+
+    // Session gate — tự discover từ GameManager, hoặc inject qua Initialize()
+    private IVoiceSessionGate _gate;
 
     public bool IsListening => _isRecording;
 
+    /// <summary>
+    /// Inject IVoiceSessionGate. Nếu không gọi, sẽ tự tìm từ GameManager.Instance khi Spawn.
+    /// </summary>
+    public void Initialize(IVoiceSessionGate gate) => _gate = gate;
+
     public override void OnNetworkSpawn()
     {
-        if (!IsOwner)
-        {
-            enabled = false;
-            return;
-        }
+        if (!IsOwner) return;
+
+        // Auto-discover gate từ GameManager nếu chưa được inject từ ngoài
+        if (_gate == null)
+            _gate = GameManager.Instance as IVoiceSessionGate;
 
         InitRecognizer();
 
-        GameManager.OnGameStarted += StartListening;
+        if (_gate != null)
+            _gate.OnSessionActivated += StartListening;
+        else
+            GameManager.OnGameStarted += StartListening; // fallback nếu không có gate
 
-        if (GameManager.Instance != null && GameManager.Instance.CurrentState.Value == GameState.Playing)
-            StartListening();
+        if (_gate?.IsVoiceSessionActive == true) StartListening();
     }
 
     public override void OnNetworkDespawn()
     {
         if (!IsOwner) return;
 
-        GameManager.OnGameStarted -= StartListening;
+        if (_gate != null) _gate.OnSessionActivated -= StartListening;
+        else               GameManager.OnGameStarted -= StartListening;
+
         StopListening();
         DisposeRecognizer();
     }
 
-    private void OnDestroy()
+    public override void OnDestroy()
     {
-        GameManager.OnGameStarted -= StartListening;
+        if (_gate != null) _gate.OnSessionActivated -= StartListening;
+        else               GameManager.OnGameStarted -= StartListening;
+
         StopListening();
         DisposeRecognizer();
+        base.OnDestroy();
     }
 
     private void InitRecognizer()
@@ -149,6 +199,9 @@ public class SherpaVoiceController : NetworkBehaviour
         _currentUtteranceSamples.Clear();
         _currentVoiceDuration = 0f;
         _silenceDuration = 0f;
+        _isTrackingUtterance = false;
+        _stableVowel = VoiceVowel.None;
+        _recentVowelVotes.Clear();
 
         Debug.Log("<color=green>[SherpaVoiceController] Microphone active! Pipeline Sẵn Sàng (U, I, A - Âm ngắn & Ngân dài)...</color>");
     }
@@ -161,6 +214,14 @@ public class SherpaVoiceController : NetworkBehaviour
         {
             Microphone.End(_selectedDevice);
         }
+
+        if (_isTrackingUtterance && IsSpawned && IsOwner)
+            EndVoiceTrackingRpc(
+                _utteranceSequence,
+                _stableVowel,
+                VoiceEndReason.MicrophoneStopped);
+
+        _isTrackingUtterance = false;
         _isRecording = false;
     }
 
@@ -187,7 +248,7 @@ public class SherpaVoiceController : NetworkBehaviour
     }
 
     /// <summary>
-    /// Giai đoạn 1: Lọc năng lượng RMS & Zero Crossing Rate (ZCR) để loại bỏ tiếng thở/tiếng gió
+    /// Phase1: phân thích audio
     /// </summary>
     private void AnalyzeAudioSlice(float[] slice)
     {
@@ -195,14 +256,23 @@ public class SherpaVoiceController : NetworkBehaviour
         float zcr = SpeechDSPUtils.CalculateZCR(slice);
         float sliceDuration = (float)slice.Length / _sampleRate;
 
-        // Tiếng nói thật: RMS > VolumeThreshold VÀ ZCR <= 0.28 (nguyên âm có chu kỳ đều đặn)
         bool isVoiced = (rms >= _volumeThreshold) && (zcr <= _maxZcrThreshold);
-
+        
         if (isVoiced)
         {
+            if (!_isTrackingUtterance)
+                BeginLocalUtterance();
+
             _currentUtteranceSamples.AddRange(slice);
             _currentVoiceDuration += sliceDuration;
             _silenceDuration = 0f;
+            UpdateRealtimeVowel(slice);
+
+            if (Time.unscaledTime >= _nextHeartbeatTime)
+            {
+                _nextHeartbeatTime = Time.unscaledTime + _heartbeatInterval;
+                VoiceHeartbeatRpc(_utteranceSequence, _stableVowel);
+            }
         }
         else
         {
@@ -220,24 +290,86 @@ public class SherpaVoiceController : NetworkBehaviour
 
     private void FinalizeUtterance()
     {
-        if (_currentVoiceDuration >= _minVowelDuration && !_isProcessing && Time.time >= _lastSpellTime + _spellCooldown)
-        {
-            float[] rawSamples = _currentUtteranceSamples.ToArray();
-            float duration = _currentVoiceDuration;
-            bool isSustained = duration >= _sustainedThreshold;
+        uint sequence = _utteranceSequence;
+        VoiceVowel realtimeVowel = _stableVowel;
+        float duration = _currentVoiceDuration;
+        float[] rawSamples = _currentUtteranceSamples.ToArray();
+        bool shouldRecognize = duration >= _minVowelDuration &&
+                               !_isProcessing &&
+                               Time.time >= _lastSpellTime + _spellCooldown;
 
-            _ = ProcessSpeechHybridAsync(rawSamples, duration, isSustained);
+        if (_isTrackingUtterance)
+        {
+            VoiceEndReason reason = duration >= _minVowelDuration
+                ? VoiceEndReason.Silence
+                : VoiceEndReason.TooShort;
+            EndVoiceTrackingRpc(sequence, realtimeVowel, reason);
+        }
+
+        _isTrackingUtterance = false;
+
+        if (shouldRecognize)
+        {
+            bool isSustained = duration >= _sustainedThreshold;
+            _ = ProcessSpeechHybridAsync(rawSamples, duration, isSustained, sequence);
         }
 
         _currentUtteranceSamples.Clear();
         _currentVoiceDuration = 0f;
         _silenceDuration = 0f;
+        _stableVowel = VoiceVowel.None;
+        _recentVowelVotes.Clear();
+    }
+
+    private void BeginLocalUtterance()
+    {
+        _utteranceSequence++;
+        _isTrackingUtterance = true;
+        _stableVowel = VoiceVowel.None;
+        _recentVowelVotes.Clear();
+        _nextHeartbeatTime = Time.unscaledTime;
+        BeginVoiceTrackingRpc(_utteranceSequence, VoiceVowel.None);
+    }
+
+    private void UpdateRealtimeVowel(float[] slice)
+    {
+        float[] emphasized = SpeechDSPUtils.ApplyPreEmphasis(slice, 0.97f);
+        VoiceVowel vote = VoiceVowel.None;
+
+        if (SpeechDSPUtils.EstimateFormants(emphasized, _sampleRate, out float f1, out float f2))
+            vote = ToVoiceVowel(SpeechDSPUtils.ClassifyFormantVowel(f1, f2));
+
+        _recentVowelVotes.Enqueue(vote);
+        while (_recentVowelVotes.Count > _vowelWindowSize)
+            _recentVowelVotes.Dequeue();
+
+        int u = 0;
+        int i = 0;
+        int a = 0;
+        foreach (VoiceVowel value in _recentVowelVotes)
+        {
+            if (value == VoiceVowel.U) u++;
+            else if (value == VoiceVowel.I) i++;
+            else if (value == VoiceVowel.A) a++;
+        }
+
+        if (_recentVowelVotes.Count < _minimumStableVotes)
+            return;
+
+        int requiredVotes = _minimumStableVotes;
+        if (u >= requiredVotes && u >= i && u >= a) _stableVowel = VoiceVowel.U;
+        else if (i >= requiredVotes && i >= u && i >= a) _stableVowel = VoiceVowel.I;
+        else if (a >= requiredVotes && a >= u && a >= i) _stableVowel = VoiceVowel.A;
     }
 
     /// <summary>
     /// Giai đoạn 2 & 3: Xử lý Kép (DSP Formants + Sherpa-ONNX) và Đối chiếu Đồng Thuận
     /// </summary>
-    private async Task ProcessSpeechHybridAsync(float[] rawSamples, float duration, bool isSustained)
+    private async Task ProcessSpeechHybridAsync(
+        float[] rawSamples,
+        float duration,
+        bool isSustained,
+        uint sequence)
     {
         if (_recognizer == null)
         {
@@ -283,9 +415,13 @@ public class SherpaVoiceController : NetworkBehaviour
 
             if (!string.IsNullOrEmpty(detectedSpell))
             {
+                if (!IsSpawned || !IsOwner)
+                    return;
+
+                ConfirmVoiceRecognitionRpc(sequence, ParseSpellVowel(detectedSpell));
                 _lastSpellTime = Time.time;
                 Debug.Log($"<color=green>[Consensus Gate] ★★★ DUYỆT THÀNH CÔNG '{detectedSpell}' (Ngân dài: {isSustained}) ★★★</color>");
-                CastSpellRpc(detectedSpell);
+                CastSpellRpc(sequence, detectedSpell);
             }
             else
             {
@@ -362,10 +498,114 @@ public class SherpaVoiceController : NetworkBehaviour
         return null;
     }
 
+    private static VoiceVowel ToVoiceVowel(SpeechDSPUtils.VowelClass vowel)
+    {
+        return vowel switch
+        {
+            SpeechDSPUtils.VowelClass.U => VoiceVowel.U,
+            SpeechDSPUtils.VowelClass.I => VoiceVowel.I,
+            SpeechDSPUtils.VowelClass.A => VoiceVowel.A,
+            _ => VoiceVowel.None
+        };
+    }
+
+    private static VoiceVowel ParseSpellVowel(string spellType)
+    {
+        if (string.IsNullOrEmpty(spellType)) return VoiceVowel.None;
+        if (spellType.StartsWith("U", StringComparison.Ordinal)) return VoiceVowel.U;
+        if (spellType.StartsWith("I", StringComparison.Ordinal)) return VoiceVowel.I;
+        if (spellType.StartsWith("A", StringComparison.Ordinal)) return VoiceVowel.A;
+        return VoiceVowel.None;
+    }
+
     [Rpc(SendTo.Server)]
-    public void CastSpellRpc(string spellType)
+    private void BeginVoiceTrackingRpc(
+        uint sequence,
+        VoiceVowel initialVowel,
+        RpcParams rpcParams = default)
+    {
+        VoiceRoundManager.Instance?.BeginVoice(
+            this,
+            rpcParams.Receive.SenderClientId,
+            sequence,
+            initialVowel);
+    }
+
+    [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable)]
+    private void VoiceHeartbeatRpc(
+        uint sequence,
+        VoiceVowel vowel,
+        RpcParams rpcParams = default)
+    {
+        VoiceRoundManager.Instance?.Heartbeat(
+            this,
+            rpcParams.Receive.SenderClientId,
+            sequence,
+            vowel);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void EndVoiceTrackingRpc(
+        uint sequence,
+        VoiceVowel vowel,
+        VoiceEndReason reason,
+        RpcParams rpcParams = default)
+    {
+        VoiceRoundManager.Instance?.EndVoice(
+            this,
+            rpcParams.Receive.SenderClientId,
+            sequence,
+            vowel,
+            reason);
+    }
+
+    [Rpc(SendTo.Server)]
+    private void ConfirmVoiceRecognitionRpc(
+        uint sequence,
+        VoiceVowel vowel,
+        RpcParams rpcParams = default)
+    {
+        VoiceRoundManager.Instance?.ConfirmRecognition(
+            this,
+            rpcParams.Receive.SenderClientId,
+            sequence,
+            vowel);
+    }
+
+    internal void ApplyServerTracking(
+        VoiceTrackState state,
+        VoiceVowel vowel,
+        float continuousDuration,
+        VoiceEndReason endReason,
+        bool isActive)
+    {
+        if (!IsServer)
+            return;
+
+        TrackedState.Value = state;
+        TrackedVowel.Value = vowel;
+        TrackedContinuousDuration.Value = continuousDuration;
+        TrackedEndReason.Value = endReason;
+        IsActivelyVoicing.Value = isActive;
+    }
+
+    [Rpc(SendTo.Server)]
+    private void CastSpellRpc(uint sequence, string spellType)
     {
         if (string.IsNullOrEmpty(spellType)) return;
+
+        VoiceVowel vowel = ParseSpellVowel(spellType);
+        if (VoiceRoundManager.Instance == null ||
+            !VoiceRoundManager.Instance.TryGetSnapshot(OwnerClientId, out VoicePlayerSnapshot snapshot) ||
+            snapshot.Sequence != sequence ||
+            snapshot.State != VoiceTrackState.Completed ||
+            snapshot.Vowel != vowel)
+        {
+            Debug.LogWarning(
+                $"[Server] Rejected voice spell '{spellType}' from player {OwnerClientId}: " +
+                "the authoritative voice track is not complete.");
+            return;
+        }
 
         Debug.Log($"[Server] Player {OwnerClientId} cast Sherpa spell '{spellType}'");
         BroadcastSpellRpc(OwnerClientId, spellType);
@@ -386,28 +626,25 @@ public class SherpaVoiceController : NetworkBehaviour
         {
             switch (spellType)
             {
-                // PHÉP U: LƯỚT
                 case "U":
-                    Debug.Log("<color=cyan>[Action U] 💨 LƯỚT NHANH TIÊU CHUẨN!</color>");
+                    Debug.Log("<color=cyan>[Action U]</color>");
                     break;
                 case "U_LONG":
-                    Debug.Log("<color=cyan>[Action U_LONG] ⚡★★★ SIÊU LƯỚT THẦN TỐC (MEGA CHARGED DASH) ★★★</color>");
+                    Debug.Log("<color=cyan>[Action U_LONG]</color>");
                     break;
 
-                // PHÉP I: KHIÊN
                 case "I":
-                    Debug.Log("<color=magenta>[Action I] 🛡️ KHIÊN BẢO VỆ TIÊU CHUẨN!</color>");
+                    Debug.Log("<color=magenta>[Action I]</color>");
                     break;
                 case "I_LONG":
-                    Debug.Log("<color=magenta>[Action I_LONG] 🔮★★★ KHIÊN BẤT HOẠI TOÀN NĂNG (IMMORTAL BARRIER) ★★★</color>");
+                    Debug.Log("<color=magenta>[Action I_LONG]</color>");
                     break;
 
-                // PHÉP A: NHẢY / XUNG KÍCH
                 case "A":
-                    Debug.Log("<color=red>[Action A] 🦘 NHẢY CAO TIÊU CHUẨN!</color>");
+                    Debug.Log("<color=red>[Action A]</color>");
                     break;
                 case "A_LONG":
-                    Debug.Log("<color=red>[Action A_LONG] 💥★★★ ĐẠI ĐỊA CHẤN XUNG KÍCH (EARTHQUAKE SHOCKWAVE) ★★★</color>");
+                    Debug.Log("<color=red>[Action A_LONG]</color>");
                     break;
             }
         }

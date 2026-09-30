@@ -19,7 +19,7 @@ public static class SpeechDSPUtils
     }
 
     /// <summary>
-    /// Applies high-frequency pre-emphasis: y[n] = x[n] - alpha * x[n-1]
+    /// Applies high-freqcuency pre-emphasis: y[n] = x[n] - alpha * x[n-1]
     /// </summary>
     public static float[] ApplyPreEmphasis(float[] signal, float alpha = 0.97f)
     {

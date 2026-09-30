@@ -12,10 +12,6 @@ public class PlayerNetworkBridge : NetworkBehaviour
     private void Awake()
     {
         _movement = GetComponent<PlayerMovement>();
-        if (GetComponent<SherpaVoiceController>() == null)
-        {
-            gameObject.AddComponent<SherpaVoiceController>();
-        }
     }
 
     /// <summary>
@@ -51,9 +47,10 @@ public class PlayerNetworkBridge : NetworkBehaviour
         GameManager.OnGameStarted -= _movement.StartPlaying;
     }
 
-    private void OnDestroy()
+    public override void OnDestroy()
     {
         if (_movement != null)
             GameManager.OnGameStarted -= _movement.StartPlaying;
+        base.OnDestroy();
     }
 }
