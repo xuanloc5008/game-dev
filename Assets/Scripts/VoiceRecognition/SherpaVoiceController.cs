@@ -84,50 +84,34 @@ public class SherpaVoiceController : NetworkBehaviour
     private bool _isTrackingUtterance;
     private float _nextHeartbeatTime;
 
-    // Session gate — tự discover từ GameManager, hoặc inject qua Initialize()
-    private IVoiceSessionGate _gate;
-
     public bool IsListening => _isRecording;
-
-    /// <summary>
-    /// Inject IVoiceSessionGate. Nếu không gọi, sẽ tự tìm từ GameManager.Instance khi Spawn.
-    /// </summary>
-    public void Initialize(IVoiceSessionGate gate) => _gate = gate;
 
     public override void OnNetworkSpawn()
     {
         if (!IsOwner) return;
 
-        // Auto-discover gate từ GameManager nếu chưa được inject từ ngoài
-        if (_gate == null)
-            _gate = GameManager.Instance as IVoiceSessionGate;
-
         InitRecognizer();
 
-        if (_gate != null)
-            _gate.OnSessionActivated += StartListening;
-        else
-            GameManager.OnGameStarted += StartListening; // fallback nếu không có gate
+        // Observer Pattern: Subscribe to GameManager's OnGameStarted event
+        GameManager.OnGameStarted += StartListening;
 
-        if (_gate?.IsVoiceSessionActive == true) StartListening();
+        // If spawned while already playing, start immediately
+        if (GameManager.Instance != null && GameManager.Instance.CurrentState.Value == GameState.Playing)
+            StartListening();
     }
 
     public override void OnNetworkDespawn()
     {
         if (!IsOwner) return;
 
-        if (_gate != null) _gate.OnSessionActivated -= StartListening;
-        else               GameManager.OnGameStarted -= StartListening;
-
+        GameManager.OnGameStarted -= StartListening;
         StopListening();
         DisposeRecognizer();
     }
 
     public override void OnDestroy()
     {
-        if (_gate != null) _gate.OnSessionActivated -= StartListening;
-        else               GameManager.OnGameStarted -= StartListening;
-
+        GameManager.OnGameStarted -= StartListening;
         StopListening();
         DisposeRecognizer();
         base.OnDestroy();

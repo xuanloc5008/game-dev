@@ -7,6 +7,14 @@ using UnityEngine;
 // Types  (enums + struct dùng chung trong toàn module)
 // ─────────────────────────────────────────────────────────────────────────────
 
+public enum VoiceVowel : byte
+{
+    None,
+    U,
+    I,
+    A
+}
+
 public enum VoiceTrackState : byte
 {
     Idle,
@@ -61,9 +69,7 @@ public readonly struct VoicePlayerSnapshot
 /// Server-authoritative tracker for simultaneous sustained voice input.
 /// Speech recognition runs client-side; this component validates timing,
 /// ownership, vowel continuity and heartbeat continuity on the host.
-///
-/// Decoupled from GameManager via IVoiceSessionGate dependency injection.
-/// Call Initialize(gate) right after AddComponent.
+/// Subscribes to GameManager events using the Observer Pattern.
 /// </summary>
 public sealed class VoiceRoundManager : MonoBehaviour
 {
@@ -95,18 +101,22 @@ public sealed class VoiceRoundManager : MonoBehaviour
 
     // ── Private state ─────────────────────────────────────────────────────────
     private readonly Dictionary<ulong, ServerVoiceState> _states = new();
-    private IVoiceSessionGate _gate;
 
     private bool   IsServerRunning => NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer;
     private double ServerNow       => NetworkManager.Singleton != null
                                        ? NetworkManager.Singleton.ServerTime.Time
                                        : Time.unscaledTimeAsDouble;
 
-    // ── Dependency injection ──────────────────────────────────────────────────
-    /// <summary>Inject session gate. Gọi ngay sau AddComponent.</summary>
-    public void Initialize(IVoiceSessionGate gate) => _gate = gate;
+    // ── Auto-Bootstrap & Unity lifecycle ──────────────────────────────────────
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void AutoBootstrap()
+    {
+        if (Instance != null || FindFirstObjectByType<VoiceRoundManager>() != null) return;
+        var go = new GameObject("VoiceRoundManager");
+        DontDestroyOnLoad(go);
+        go.AddComponent<VoiceRoundManager>();
+    }
 
-    // ── Unity lifecycle ───────────────────────────────────────────────────────
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(this); return; }
@@ -117,12 +127,20 @@ public sealed class VoiceRoundManager : MonoBehaviour
     {
         if (NetworkManager.Singleton != null)
             NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+
+        // Observer Pattern: Subscribe to GameManager round events
+        GameManager.OnVoiceRoundConfigured += ConfigureRoundServer;
+        GameManager.OnVoiceRoundReset += ResetAllServerStates;
     }
 
     private void OnDestroy()
     {
         if (NetworkManager.Singleton != null)
             NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
+
+        GameManager.OnVoiceRoundConfigured -= ConfigureRoundServer;
+        GameManager.OnVoiceRoundReset -= ResetAllServerStates;
+
         if (Instance == this) Instance = null;
     }
 
@@ -344,7 +362,8 @@ public sealed class VoiceRoundManager : MonoBehaviour
         controller != null &&
         controller.IsSpawned &&
         controller.OwnerClientId == senderClientId &&
-        (_gate == null || _gate.IsVoiceSessionActive);
+        GameManager.Instance != null &&
+        GameManager.Instance.CurrentState.Value == GameState.Playing;
 
     private void OnClientDisconnected(ulong clientId)
     {
