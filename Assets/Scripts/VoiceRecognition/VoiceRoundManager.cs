@@ -3,10 +3,6 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types  (enums + struct dùng chung trong toàn module)
-// ─────────────────────────────────────────────────────────────────────────────
-
 public enum VoiceVowel : byte
 {
     None,
@@ -128,7 +124,7 @@ public sealed class VoiceRoundManager : MonoBehaviour
         if (NetworkManager.Singleton != null)
             NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
 
-        // Observer Pattern: Subscribe to GameManager round events
+        // Subscribe to GameManager round events
         GameManager.OnVoiceRoundConfigured += ConfigureRoundServer;
         GameManager.OnVoiceRoundReset += ResetAllServerStates;
     }

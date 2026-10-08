@@ -17,7 +17,7 @@ public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    // ── Observer Pattern: Subject Events (Publishers) ─────────────────────────
+    // ── Subject Events (Publishers) ─────────────────────────
     public static event Action OnGameStarted;
     public static event Action<VoiceVowel, float> OnVoiceRoundConfigured;
     public static event Action OnVoiceRoundReset;
