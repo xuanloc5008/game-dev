@@ -17,10 +17,8 @@ public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    // ── Subject Events (Publishers) ─────────────────────────
+    // ── Subject Event (Publisher) ─────────────────────────
     public static event Action OnGameStarted;
-    public static event Action<VoiceVowel, float> OnVoiceRoundConfigured;
-    public static event Action OnVoiceRoundReset;
 
     public NetworkVariable<GameState> CurrentState =
         new NetworkVariable<GameState>(
@@ -59,23 +57,5 @@ public class GameManager : NetworkBehaviour
     {
         if (!IsServer) return;
         CurrentState.Value = GameState.Playing;
-    }
-
-    /// <summary>
-    /// Host-only: configure the current voice challenge via Observer event.
-    /// VoiceVowel.None = accept any of U / I / A.
-    /// </summary>
-    [Rpc(SendTo.Server)]
-    public void ConfigureVoiceRoundRpc(VoiceVowel expectedVowel, float requiredDuration)
-    {
-        if (!IsServer) return;
-        OnVoiceRoundConfigured?.Invoke(expectedVowel, requiredDuration);
-    }
-
-    [Rpc(SendTo.Server)]
-    public void ResetVoiceRoundRpc()
-    {
-        if (!IsServer) return;
-        OnVoiceRoundReset?.Invoke();
     }
 }
