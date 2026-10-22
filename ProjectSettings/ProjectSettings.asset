@@ -928,11 +928,11 @@ PlayerSettings:
   captureStartupLogs: {}
   activeInputHandler: 1
   windowsGamepadBackendHint: 0
-  cloudProjectId: a04eb88a-534b-4eb6-80a4-ff54134c75a3
+  cloudProjectId: 980bf6c0-2af4-472b-91fd-dcc46828487a
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
   projectName: U6-Multiplayer
-  organizationId: unity_c866e3d356df6159ff5a
+  organizationId: bkhcm
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
   hmiLoadingImage: {fileID: 0}
