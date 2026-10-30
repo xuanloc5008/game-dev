@@ -2,34 +2,54 @@ using System;
 using Unity.Netcode;
 using UnityEngine;
 
-public enum GameState { Lobby, Playing }
+public enum GameState
+{
+    Lobby,
+    Playing
+}
 
 /// <summary>
 /// Owns game phase state (Lobby/Playing) for all clients via NetworkVariable.
+/// Acts as the Subject (Publisher) in the Observer pattern, broadcasting events
+/// to decoupled subsystems (Movement, VoiceRecognition, UI, etc.).
 /// </summary>
 public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    // C# event — safe to subscribe before the network starts (LobbyController, FPSController).
+    // ── Subject Event (Publisher) ─────────────────────────
     public static event Action OnGameStarted;
 
-    public NetworkVariable<GameState> CurrentState = new NetworkVariable<GameState>(
-        GameState.Lobby,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server);
+    public NetworkVariable<GameState> CurrentState =
+        new NetworkVariable<GameState>(
+            GameState.Lobby,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
 
-    private void Awake() => Instance = this;
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     public override void OnNetworkSpawn()
     {
-        CurrentState.OnValueChanged += (_, next) =>
-        {
-            if (next == GameState.Playing) OnGameStarted?.Invoke();
-        };
+        CurrentState.OnValueChanged += OnGameStateChanged;
 
-        // Already Playing when this spawns (shouldn't happen, but guard anyway).
-        if (CurrentState.Value == GameState.Playing) OnGameStarted?.Invoke();
+        if (CurrentState.Value == GameState.Playing)
+        {
+            OnGameStarted?.Invoke();
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        CurrentState.OnValueChanged -= OnGameStateChanged;
+    }
+
+    private void OnGameStateChanged(GameState previous, GameState next)
+    {
+        if (next != GameState.Playing) return;
+        OnGameStarted?.Invoke();
     }
 
     [Rpc(SendTo.Server)]
