@@ -2557,6 +2557,7 @@ GameObject:
   - component: {fileID: 3523419324758030722}
   - component: {fileID: 6419026452324771329}
   - component: {fileID: 1965278060128355832}
+  - component: {fileID: 6856014384872540915}
   m_Layer: 9
   m_Name: Player
   m_TagString: Untagged
@@ -3197,6 +3198,24 @@ MonoBehaviour:
       m_Flags: 0
     m_Flags: 0
   pointAdd: 1
+--- !u!114 &6856014384872540915
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6294050915633850349}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 759b991395f594915a3eb7135beff29b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SherpaVoiceController
+  ShowTopMostFoldoutHeaderGroup: 1
+  _volumeThreshold: 0.0035
+  _maxZcrThreshold: 0.28
+  _silenceTolerance: 0.18
+  _minChantStartDuration: 0.2
+  _sampleRate: 16000
 --- !u!1 &6340245180678893273
 GameObject:
   m_ObjectHideFlags: 0
