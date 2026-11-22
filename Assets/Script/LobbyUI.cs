@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -7,6 +8,7 @@ using UnityEngine.UIElements;
 /// </summary>
 public class LobbyUI : MonoBehaviour
 {
+    [SerializeField] private PlayerSpawnManager _spawnManager;
     public event Action HostClicked;
     public event Action JoinClicked;
     public event Action StartClicked;
@@ -18,8 +20,11 @@ public class LobbyUI : MonoBehaviour
     private Button _hostBtn, _joinBtn, _startBtn, _leaveBtn, _quitBtn, _copyBtn;
     private TextField _joinCodeField;
     private Label _statusLabel;
+    private ListView _playerList;
 
     private string _currentJoinCode;
+    private readonly List<string> _rows = new();
+    private bool _showPlayerList;
 
     private static readonly Color32 Green = new Color32(117, 255, 81, 255);
     private static readonly Color32 Red = new Color32(220, 80, 80, 255);
@@ -38,6 +43,22 @@ public class LobbyUI : MonoBehaviour
         _copyBtn = root.Q<Button>("copy-btn");
         _joinCodeField = root.Q<TextField>("join-code-field");
         _statusLabel = root.Q<Label>("status-label");
+        _playerList = root.Q<ListView>("player-list");
+        
+        _playerList.fixedItemHeight = 32;
+        _playerList.selectionType = SelectionType.None;
+        _playerList.makeItem = () => new Label();
+
+        _playerList.bindItem = (element, index) =>
+        {
+            ((Label)element).text = _rows[index];
+        };
+        
+        _playerList.itemsSource = _rows;
+        
+        if (_spawnManager == null)
+            Debug.LogError("Missing spawn-manager");
+        _spawnManager.OnPlayerListChanged += RefreshPlayerList;
 
         if (_hostBtn != null) _hostBtn.clicked += () => HostClicked?.Invoke();
         if (_joinBtn != null) _joinBtn.clicked += () => JoinClicked?.Invoke();
@@ -52,8 +73,46 @@ public class LobbyUI : MonoBehaviour
         SetIdle();
     }
 
+    private void RefreshPlayerList()
+    {
+        if (_playerList == null) return;
+        _rows.Clear();
+
+        if (_showPlayerList)
+        {
+            for (int i = 0; i < _spawnManager.PlayerCount; i++)
+            {
+                ulong id = _spawnManager.GetPlayerId(i);
+                
+                _rows.Add(id == Unity.Netcode.NetworkManager.ServerClientId
+                    ? "Host"
+                    : $"Player {id}");
+            }
+            
+            Show(_playerList);
+        }
+        else
+        {
+            Hide(_playerList);
+        }
+        _playerList.RefreshItems();
+    }
+
+    private void SetPlayerListVisible(bool visible)
+    {
+        _showPlayerList = visible;
+        RefreshPlayerList();
+    }
+
+    private void OnDestroy()
+    {
+        if (_spawnManager != null)
+            _spawnManager.OnPlayerListChanged -= RefreshPlayerList;
+    }
+
     public void SetIdle()
     {
+        SetPlayerListVisible(false);
         Show(_hostBtn); Show(_joinBtn); Show(_joinCodeField); Show(_quitBtn); Show(_startBtn);
         Hide(_leaveBtn); Hide(_copyBtn);
         if (_hostBtn != null) { _hostBtn.style.backgroundColor = new StyleColor(Red); _hostBtn.style.color = new StyleColor(LightText); _hostBtn.text = "Host"; }
@@ -64,6 +123,7 @@ public class LobbyUI : MonoBehaviour
     {
         _currentJoinCode = joinCode;
         Show(_hostBtn); Show(_startBtn); Show(_quitBtn); Show(_copyBtn);
+        SetPlayerListVisible(true);
         Hide(_joinBtn); Hide(_joinCodeField); Hide(_leaveBtn);
         if (_hostBtn != null) { _hostBtn.style.backgroundColor = new StyleColor(Green); _hostBtn.style.color = new StyleColor(DarkText); _hostBtn.text = "Leave"; }
         if (_statusLabel != null) _statusLabel.text = $"Join code: {joinCode}";
@@ -72,6 +132,7 @@ public class LobbyUI : MonoBehaviour
     public void SetClient()
     {
         Show(_leaveBtn); Show(_quitBtn);
+        SetPlayerListVisible(true);
         Hide(_hostBtn); Hide(_joinBtn); Hide(_joinCodeField); Hide(_startBtn); Hide(_copyBtn);
         if (_statusLabel != null) _statusLabel.text = "Connected to host";
     }

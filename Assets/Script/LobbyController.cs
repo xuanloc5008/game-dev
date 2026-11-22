@@ -26,12 +26,27 @@ public class LobbyController : MonoBehaviour
 
         GameManager.OnGameStarted += OnGameStarted;
         NetworkManager.Singleton.OnTransportFailure += OnTransportFailure;
+        NetworkManager.Singleton.OnClientStopped += HandClientStopped;
+        NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnected;
 
         // Start local host first — P1 spawns instantly without waiting for Unity Services.
         StartLocalHost();
 
         // Init Unity Services (auth + Vivox) in the background.
         await _relay.InitializeAsync();
+    }
+
+    private void HandleClientConnected(ulong obj)
+    {
+        var manager = NetworkManager.Singleton;
+        if (!manager.IsHost)
+            _ui.SetClient();
+    }
+
+    private void HandClientStopped(bool washost)
+    {
+        _relay.ResetIsHosting();
+        _ui.SetIdle();
     }
 
     private void OnDestroy()
