@@ -748,7 +748,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b5d7c088409d9a40b7b09aa707777f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineOrbitalFollow
-  TargetOffset: {x: 0, y: 1.5, z: 0}
+  TargetOffset: {x: 0, y: 0.75, z: 0}
   TrackerSettings:
     BindingMode: 4
     PositionDamping: {x: 1, y: 1, z: 1}
@@ -756,17 +756,17 @@ MonoBehaviour:
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
   OrbitStyle: 0
-  Radius: 10
+  Radius: 5
   Orbits:
     Top:
-      Radius: 2
-      Height: 5
+      Radius: 1
+      Height: 2.5
     Center:
-      Radius: 4
-      Height: 2.25
+      Radius: 2
+      Height: 1.125
     Bottom:
-      Radius: 1.5
-      Height: 0.1
+      Radius: 0.75
+      Height: 0.05
     SplineCurvature: 0.5
   RecenteringTarget: 2
   HorizontalAxis:
@@ -2558,6 +2558,7 @@ GameObject:
   - component: {fileID: 6419026452324771329}
   - component: {fileID: 1965278060128355832}
   - component: {fileID: 6856014384872540915}
+  - component: {fileID: 4023647860449494207}
   m_Layer: 9
   m_Name: Player
   m_TagString: Untagged
@@ -2575,7 +2576,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 119.3, y: 2.1046147, z: 90.6}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 6541209354996415461}
@@ -2842,10 +2843,10 @@ MonoBehaviour:
   maxWalkSpeed: 3
   maxSprintSpeed: 6
   rotateSpeed: 180
-  jumpForce: 50
+  jumpForce: 35
   rigidBody: {fileID: 1679689204623050420}
   groundCheck: {fileID: 3115704160764362521}
-  groundCheckRadius: 0.2
+  groundCheckRadius: 0.15
   groundLayer:
     serializedVersion: 2
     m_Bits: 128
@@ -3063,15 +3064,8 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   _headRenderer: {fileID: 5630142862028383913}
   _materials:
-  - {fileID: 2100000, guid: a192c349c6c1e4347b9900ec892790b4, type: 2}
-  - {fileID: 2100000, guid: ac98a90998a94fb4c89907547073934b, type: 2}
+  - {fileID: 2100000, guid: 237717d1abd6f384d84686e18dae4d79, type: 2}
   - {fileID: 2100000, guid: 94e25bbc77a46c246a57c34832735910, type: 2}
-  - {fileID: 2100000, guid: 5ce587fbafc1a5242850cc89835f6f04, type: 2}
-  PlayerIndex:
-    UpdateTraits:
-      MinSecondsBetweenUpdates: 0
-      MaxSecondsBetweenUpdates: 0
-    m_InternalValue: -1
 --- !u!114 &8844788304171763535
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3131,8 +3125,8 @@ MonoBehaviour:
   mouseSensitivity: 2
   scrollSpeed: 2
   zoomLerpSpeed: 10
-  minDist: 3
-  maxDist: 15
+  minDist: 1.5
+  maxDist: 8
 --- !u!114 &3523419324758030722
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3216,6 +3210,19 @@ MonoBehaviour:
   _silenceTolerance: 0.18
   _minChantStartDuration: 0.2
   _sampleRate: 16000
+--- !u!114 &4023647860449494207
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6294050915633850349}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8af3eb5fa78251044a5caf17671a1c6a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerTeam
+  ShowTopMostFoldoutHeaderGroup: 1
 --- !u!1 &6340245180678893273
 GameObject:
   m_ObjectHideFlags: 0

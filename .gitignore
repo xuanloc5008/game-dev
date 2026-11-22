@@ -109,6 +109,9 @@ InitTestScene*.unity*
 /AI/
 
 # Large AI Models in StreamingAssets
-Assets/StreamingAssets/Whisper/*.bin
+Assets/StreamingAssets/Whisper/
+Assets/StreamingAssets/Whisper.meta
 Assets/StreamingAssets/SherpaOnnx/*/*.onnx
+Assets/StreamingAssets/SherpaOnnx/*/*.onnx.meta
 Assets/StreamingAssets/SherpaOnnx/*/*.model
+Assets/StreamingAssets/SherpaOnnx/*/*.model.meta

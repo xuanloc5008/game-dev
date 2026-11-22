@@ -16,6 +16,7 @@ public enum GameState
 public class GameManager : NetworkBehaviour
 {
     public static GameManager Instance { get; private set; }
+    [SerializeField] private PlayerSpawnManager _playerSpawnManager;
 
     // ── Subject Event (Publisher) ─────────────────────────
     public static event Action OnGameStarted;
@@ -57,5 +58,12 @@ public class GameManager : NetworkBehaviour
     {
         if (!IsServer) return;
         CurrentState.Value = GameState.Playing;
+        if (_playerSpawnManager == null)
+        {
+            Debug.LogError("Player spawn manager is null");
+            return;
+        }
+
+        _playerSpawnManager.TrySpawnPlayersServerRpc();
     }
 }
