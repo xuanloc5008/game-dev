@@ -205,7 +205,7 @@ GameObject:
   m_Component:
   - component: {fileID: 158560670}
   m_Layer: 0
-  m_Name: Spawn Positions
+  m_Name: Spawn PositionsTeamA
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1546,6 +1546,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   ShowTopMostFoldoutHeaderGroup: 1
+  _playerSpawnManager: {fileID: 950196603}
   CurrentState:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -1563,11 +1564,33 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 11c7f47e98b5c9949b5120e7a5d40a12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSpawnManager
+  ShowTopMostFoldoutHeaderGroup: 1
   _spawnPoints:
-  - {fileID: 516206919}
-  - {fileID: 238267824}
-  - {fileID: 1766124136}
-  - {fileID: 196412439}
+  - TeamId: 0
+    SlotIdx: 0
+    SpawnTransform: {fileID: 1672825932}
+  - TeamId: 0
+    SlotIdx: 1
+    SpawnTransform: {fileID: 804841522}
+  - TeamId: 0
+    SlotIdx: 2
+    SpawnTransform: {fileID: 758712939}
+  - TeamId: 0
+    SlotIdx: 3
+    SpawnTransform: {fileID: 423815200}
+  - TeamId: 1
+    SlotIdx: 0
+    SpawnTransform: {fileID: 1119802697}
+  - TeamId: 1
+    SlotIdx: 1
+    SpawnTransform: {fileID: 1852656464}
+  - TeamId: 1
+    SlotIdx: 2
+    SpawnTransform: {fileID: 1868726496}
+  - TeamId: 1
+    SlotIdx: 3
+    SpawnTransform: {fileID: 1205114792}
+  _teamManager: {fileID: 1373131333}
 --- !u!114 &950196604
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2118,6 +2141,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df1646390b94dee47b0f0b7c7fc7e0f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbyUI
+  _spawnManager: {fileID: 950196603}
 --- !u!114 &1698959791
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2694,6 +2718,7 @@ SceneRoots:
   m_Roots:
   - {fileID: 953347886}
   - {fileID: 158560670}
+  - {fileID: 624364979}
   - {fileID: 971321420}
   - {fileID: 950196601}
   - {fileID: 1975353176}
